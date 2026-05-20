@@ -1,14 +1,18 @@
 #include <iostream>
-#include <string>
-#include <thread>
-#include <chrono>
 #include <vector>
-#include <sstream>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include <string>
 #include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+
+#include "Profiler.h"
+#include "Parser.h"
+#include "mm.h"
 
 using namespace std;
+
+#define PROFILE_OUTPUT "profile.csv"
+#define MODEL_VERSION "matmul_direct_trace_openmp_on"
 
 int main(int argc, char** argv) {
     if (argc < 4) {
@@ -20,57 +24,144 @@ int main(int argc, char** argv) {
     int port = stoi(argv[2]);
     string team = argv[3];
 
-    cout << "HFT Client Template\n";
-    cout << "This client connects but does NOT solve challenges.\n";
-    cout << "You must implement the real logic.\n\n";
-
     // --- Connect to server ---
     int sock = socket(AF_INET, SOCK_STREAM, 0);
+
     if (sock < 0) {
-        perror("socket");
+        perror("socket failed");
         return 1;
     }
 
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
+    sockaddr_in serverAddr{};
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(port);
 
-    if (connect(sock, (sockaddr*)&addr, sizeof(addr)) < 0) {
-        perror("connect");
+    if (inet_pton(AF_INET, host.c_str(), &serverAddr.sin_addr) <= 0) {
+        cerr << "Invalid host address: " << host << endl;
+        close(sock);
         return 1;
     }
+
+    if (connect(sock, (sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        perror("connect failed");
+        close(sock);
+        return 1;
+    }
+
+    cout << "Connected to server at " << host << ":" << port << endl;
 
     // Send team name
     string intro = team + "\n";
     send(sock, intro.c_str(), intro.size(), 0);
 
-    cout << "Connected to server at " << host << ":" << port << "\n";
-    cout << "Waiting for challenges...\n";
+    cout << "Sent team name: " << team << endl;
+    cout << "Waiting for challenges..." << endl;
 
-    char buffer[65536];
+    // Use your fast socket parser
+    FastParser reader(sock);
+
+    Profiler profiler(PROFILE_OUTPUT, MODEL_VERSION);
 
     while (true) {
-        int n = recv(sock, buffer, sizeof(buffer)-1, 0);
-        if (n <= 0) {
-            cout << "Disconnected from server.\n";
+        int challengeId;
+        int N;
+
+        if (!reader.readInt(challengeId)) {
+            cout << "Disconnected or failed reading challengeId." << endl;
             break;
         }
 
-        buffer[n] = '\0';
-        string msg(buffer);
+        if (!reader.readInt(N)) {
+            cout << "Disconnected or failed reading N." << endl;
+            break;
+        }
 
-        // Fake parsing
-        cout << "[DEBUG] Received challenge (" << n << " bytes)\n";
+        auto t1 = profiler.now();
 
-        // Pretend to compute something
-        this_thread::sleep_for(chrono::milliseconds(5));
+        if (N != 128) {
+            cerr << "Bad N received: " << N << ". Stream may be corrupted." << endl;
+            break;
+        }
 
-        // Always send wrong answer
-        string fake = "0 0\n";
-        send(sock, fake.c_str(), fake.size(), 0);
+        cout << "Received challenge " << challengeId << " with N = " << N << endl;
 
-        cout << "[DEBUG] Sent fake answer\n";
+        vector<int> A(N * N);
+        vector<int> B(N * N);
+
+        for (int i = 0; i < N * N; ++i) {
+            if (!reader.readInt(A[i])) {
+                cerr << "Failed reading A" << endl;
+                close(sock);
+                return 1;
+            }
+        }
+
+        auto t2 = profiler.now();
+
+        for (int i = 0; i < N * N; ++i) {
+            if (!reader.readInt(B[i])) {
+                cerr << "Failed reading B" << endl;
+                close(sock);
+                return 1;
+            }
+        }
+
+        auto t3 = profiler.now();
+
+        // Calculate tr(AB)
+        mm compute;
+
+        // Choose one:
+        // long long answer = compute.trace_via_matmul(A, B);
+        // long long answer = compute.trace_direct(A, B);
+        long long answer = compute.trace_direct_openmp(A, B);
+
+        auto t4 = profiler.now();
+
+        /*
+          Important:
+          Your old code sent only:
+              answer\n
+
+          The new template sends:
+              "0 0\n"
+
+          So check your server protocol.
+
+          If server expects only answer:
+              answer\n
+
+          If server expects challengeId and answer:
+              challengeId answer\n
+        */
+
+        string answerStr = to_string(answer) + "\n";
+
+        // If the new server expects "challengeId answer", use this instead:
+        // string answerStr = to_string(challengeId) + " " + to_string(answer) + "\n";
+
+        send(sock, answerStr.c_str(), answerStr.size(), 0);
+
+        auto t5 = profiler.now();
+
+        long long read_A_us = profiler.usBetween(t1, t2);
+        long long read_B_us = profiler.usBetween(t2, t3);
+        long long compute_us = profiler.usBetween(t3, t4);
+        long long send_us = profiler.usBetween(t4, t5);
+        long long total_us = profiler.usBetween(t1, t5);
+
+        profiler.log(
+            challengeId,
+            N,
+            read_A_us,
+            read_B_us,
+            compute_us,
+            send_us,
+            total_us,
+            answer
+        );
+
+        cout << "Sent answer: " << answer << endl;
     }
 
     close(sock);

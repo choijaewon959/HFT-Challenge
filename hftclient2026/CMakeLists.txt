@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 project(hftclient2026 LANGUAGES CXX)
 
-add_executable(hftclient2026 main.cpp)
+add_executable(hftclient2026 main.cpp
+        Parser.h
+        Profiler.h
+        mm.h)
 
 target_link_libraries(hftclient2026 PRIVATE nlohmann_json::nlohmann_json)
 
