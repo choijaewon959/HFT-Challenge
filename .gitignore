@@ -7,4 +7,27 @@ client_pids.txt
 /cmake-build-debug/
 /HFTDashboard/.venv
 
+# CLion / JetBrains
+.idea/
 
+# CMake build directories
+cmake-build-*/
+build/
+
+# Compiled binaries / objects
+*.o
+*.out
+*.exe
+*.dylib
+*.so
+*.a
+
+# macOS
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# CSV outputs
+*.csv
