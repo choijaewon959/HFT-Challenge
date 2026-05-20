@@ -118,27 +118,7 @@ int main(int argc, char** argv) {
 
         auto t4 = profiler.now();
 
-        /*
-          Important:
-          Your old code sent only:
-              answer\n
-
-          The new template sends:
-              "0 0\n"
-
-          So check your server protocol.
-
-          If server expects only answer:
-              answer\n
-
-          If server expects challengeId and answer:
-              challengeId answer\n
-        */
-
-        string answerStr = to_string(answer) + "\n";
-
-        // If the new server expects "challengeId answer", use this instead:
-        // string answerStr = to_string(challengeId) + " " + to_string(answer) + "\n";
+        string answerStr = to_string(challengeId) + " " + to_string(answer) + "\n";
 
         send(sock, answerStr.c_str(), answerStr.size(), 0);
 
