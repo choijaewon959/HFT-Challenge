@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
         // Choose one:
         // long long answer = compute.trace_via_matmul(A, B);
         // long long answer = compute.trace_direct(A, B);
-        long long answer = compute.trace_direct_openmp(A, B);
+        long long answer = compute.checksum_via_matmul(A, B);
 
         auto t4 = profiler.now();
 
@@ -141,7 +141,7 @@ int main(int argc, char** argv) {
             answer
         );
 
-        cout << "Sent answer: " << answer << endl;
+        cout << "Sent answer: " << answerStr << endl;
     }
 
     close(sock);
