@@ -12,7 +12,7 @@
 using namespace std;
 
 #define PROFILE_OUTPUT "profile_release.csv"
-#define MODEL_VERSION "matmul_direct_openmp"
+#define MODEL_VERSION "matmul_row_col_sum_no_opnmp"
 
 int main(int argc, char** argv) {
     if (argc < 4) {
@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
         // Choose one:
         // long long answer = compute.trace_via_matmul(A, B);
         // long long answer = compute.trace_direct(A, B);
-        long long answer = compute.checksum_direct_openmp(A, B);
+        long long answer = compute.checksum_via_row_col_sums(A, B);
 
         auto t4 = profiler.now();
 

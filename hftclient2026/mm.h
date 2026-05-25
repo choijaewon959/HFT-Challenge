@@ -112,6 +112,71 @@ public:
         return checksum_direct(Aflat, Bflat);
 #endif
     }
+
+
+    static long long checksum_via_row_col_sums(const std::vector<int>& Aflat,
+                                   const std::vector<int>& Bflat) {
+        long long colSumA[N] = {0};
+        long long rowSumB[N] = {0};
+
+#ifdef USE_OPENMP
+        // Compute column sums of A.
+        // Parallelize by column to avoid race conditions.
+#pragma omp parallel for schedule(static)
+        for (int j = 0; j < N; ++j) {
+            long long sum = 0;
+
+            for (int i = 0; i < N; ++i) {
+                sum += Aflat[i * N + j];
+            }
+
+            colSumA[j] = sum % MOD;
+        }
+
+        // Compute row sums of B.
+        // Parallelize by row to avoid race conditions.
+#pragma omp parallel for schedule(static)
+        for (int i = 0; i < N; ++i) {
+            long long sum = 0;
+            int row = i * N;
+
+            for (int j = 0; j < N; ++j) {
+                sum += Bflat[row + j];
+            }
+
+            rowSumB[i] = sum % MOD;
+        }
+
+        long long ans = 0;
+
+#pragma omp parallel for reduction(+:ans) schedule(static)
+        for (int k = 0; k < N; ++k) {
+            ans += colSumA[k] * rowSumB[k];
+        }
+
+        return ans % MOD;
+
+#else
+        // Single-threaded version.
+        for (int i = 0; i < N; ++i) {
+            int row = i * N;
+
+            for (int j = 0; j < N; ++j) {
+                colSumA[j] += Aflat[row + j];
+                rowSumB[i] += Bflat[row + j];
+            }
+        }
+
+        long long ans = 0;
+
+        for (int k = 0; k < N; ++k) {
+            ans += (colSumA[k] % MOD) * (rowSumB[k] % MOD);
+            ans %= MOD;
+        }
+
+        return ans;
+#endif
+    }
 };
 
 #endif
